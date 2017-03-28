@@ -4,6 +4,7 @@ import (
 	"net/smtp"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	log "github.com/inconshreveable/log15"
@@ -52,6 +53,9 @@ func main() {
 
 	mua := email.NewPool(smtp_domain+":"+smtp_port, 2, smtp.PlainAuth("", smtp_user, smtp_pass, smtp_domain))
 
+	// Info block received on connect.
+	var info slack.Info
+
 	// Team info populated on connect.
 	var team slack.Team
 
@@ -71,6 +75,8 @@ func main() {
 	for msg := range rtm.IncomingEvents {
 		switch ev := msg.Data.(type) {
 		case *slack.ConnectedEvent:
+			info = *ev.Info
+
 			team = *ev.Info.Team
 
 			user_id = ev.Info.User.ID
@@ -97,18 +103,19 @@ func main() {
 			}
 
 			if mentioned.MatchString(ev.Text) {
-				log.Info("Mentioned, preparing email.")
+				log.Debug("Mentioned; preparing email.")
+				speaker := info.GetUserByID(ev.User)
 
 				e := &email.Email{
 					From:    user_email,
 					To:      []string{user_email},
 					Subject: "Mentioned!",
-					Text:    []byte(ev.Text + "\n" + "https://" + team.Domain + ".slack.com/archives/" + ev.Channel + "/p" + string(ev.Timestamp)),
+					Text:    []byte(speaker.Name + ": " + ev.Text + "\n\n" + "https://" + team.Domain + ".slack.com/archives/" + ev.Channel + "/p" + strings.Replace(ev.Timestamp, ".", "", -1)),
 				}
 				err := mua.Send(e, smtp_timeout_d)
 				cannot(err)
 
-				log.Info("Mentioned, email sent.", "email", e)
+				log.Info("Mentioned; email sent.")
 			}
 		case *slack.LatencyReport:
 			log.Debug("Latency", "duration", ev.Value)
