@@ -5,7 +5,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
 
 	log "github.com/inconshreveable/log15"
 	"github.com/jordan-wright/email"
@@ -33,7 +32,6 @@ func getenv(name string, def *string) string {
 }
 
 var SMTP_PORT string = "587"
-var SMTP_TIMEOUT string = "10s"
 
 func main() {
 	// Read configuration from environment.
@@ -42,16 +40,9 @@ func main() {
 	smtp_port := getenv("SMTP_PORT", &SMTP_PORT)
 	smtp_user := getenv("SMTP_USER", nil)
 	smtp_pass := getenv("SMTP_PASS", nil)
-	smtp_timeout := getenv("SMTP_TIMEOUT", &SMTP_TIMEOUT)
 
 	// Prepare a Slack API client.
 	api := slack.New(token)
-
-	// Prepare an email client.
-	smtp_timeout_d, err := time.ParseDuration(smtp_timeout)
-	cannot(err)
-
-	mua := email.NewPool(smtp_domain+":"+smtp_port, 2, smtp.PlainAuth("", smtp_user, smtp_pass, smtp_domain))
 
 	// Info block received on connect.
 	var info slack.Info
@@ -112,7 +103,7 @@ func main() {
 					Subject: "Mentioned!",
 					Text:    []byte(speaker.Name + ": " + ev.Text + "\n\n" + "https://" + team.Domain + ".slack.com/archives/" + ev.Channel + "/p" + strings.Replace(ev.Timestamp, ".", "", -1)),
 				}
-				err := mua.Send(e, smtp_timeout_d)
+				err := e.Send(smtp_domain+":"+smtp_port, smtp.PlainAuth("", smtp_user, smtp_pass, smtp_domain))
 				cannot(err)
 
 				log.Info("Mentioned; email sent.")
